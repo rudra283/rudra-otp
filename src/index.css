@@ -1,24 +1,115 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap');
 
 @theme {
-  --color-bento-bg: #050505;
-  --color-bento-card: rgba(255, 255, 255, 0.03);
-  --color-bento-glass: rgba(255, 255, 255, 0.08);
-  --color-bento-border: rgba(255, 255, 255, 0.12);
-  --color-accent-purple: #6a11cb;
-  --color-accent-blue: #2575fc;
-  --color-neon-cyan: #00f2fe;
-  --color-neon-green: #00FF9D;
-  
-  --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-cyber-blue: #3b82f6;
+  --color-cyber-pink: #ec4899;
+  --color-cyber-cyan: #06b6d4;
+  --color-cyber-bg: #020617;
+  --color-cyber-bg-light: #f8fafc;
 }
 
 @layer base {
   body {
-    @apply bg-bento-bg text-white font-sans min-h-screen overflow-x-hidden;
-    background-image: 
-      radial-gradient(circle at 0% 0%, #1a1a2e 0%, transparent 40%),
-      radial-gradient(circle at 100% 100%, #16213e 0%, transparent 40%);
-    background-attachment: fixed;
+    @apply font-sans antialiased overflow-x-hidden;
   }
+}
+
+.theme-dark {
+  background-color: #020617;
+  color: #e2e8f0;
+}
+
+.theme-light {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+::-webkit-scrollbar { display: none; }
+
+.glass {
+  transition: all 0.3s ease;
+}
+
+.theme-dark .glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.theme-light .glass {
+  background: rgba(0, 0, 0, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.theme-dark .glass-dark {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(25px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.theme-light .glass-dark {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(25px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.text-dynamic {
+  @apply transition-colors duration-300;
+}
+
+.theme-dark .text-dynamic { color: rgba(255, 255, 255, 0.9); }
+.theme-light .text-dynamic { color: rgba(15, 23, 42, 0.9); }
+
+.text-muted-dynamic {
+  @apply transition-opacity duration-300;
+}
+
+.theme-dark .text-muted-dynamic { color: rgba(255, 255, 255, 0.4); }
+.theme-light .text-muted-dynamic { color: rgba(15, 23, 42, 0.5); }
+
+
+.glow-blue {
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.15);
+}
+
+.glow-pink {
+  box-shadow: 0 0 30px rgba(236, 72, 153, 0.15);
+}
+
+.text-glow {
+  text-shadow: 0 0 10px currentColor;
+}
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1.5rem;
+}
+
+.cyber-input {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cyber-input:focus {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
 }

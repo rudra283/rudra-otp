@@ -16,7 +16,9 @@ import {
   Cpu,
   Layers,
   Smartphone,
-  Monitor
+  Monitor,
+  Sun,
+  Moon
 } from "lucide-react";
 
 // --- Types ---
@@ -116,14 +118,52 @@ export default function App() {
   const [tab, setTab] = useState<"gateway" | "docs">("gateway");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<{ type: "success" | "error" | "warning", msg: string } | null>(null);
+  const [mode, setMode] = useState<"stealth" | "turbo">("stealth");
+  const [logs, setLogs] = useState<{ id: string, msg: string, type: 'info' | 'success' | 'cmd' }[]>([]);
+  const [recent, setRecent] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      return JSON.parse(localStorage.getItem("shatarudra-recent") || "[]");
+    }
+    return [];
+  });
+  const [progress, setProgress] = useState(0);
+  const [techDiagnostics, setTechDiagnostics] = useState<TechData | null>(null);
+
+  useEffect(() => {
+    captureTechData().then(setTechDiagnostics);
+    const interval = setInterval(() => {
+      captureTechData().then(setTechDiagnostics);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (logs.length > 50) setLogs(prev => prev.slice(-50));
+  }, [logs]);
+
+  const addLog = (msg: string, type: 'info' | 'success' | 'cmd' = 'info') => {
+    setLogs(prev => [...prev, { id: Math.random().toString(36), msg, type }]);
+  };
+
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("shatarudra-theme") as any) || "dark";
+    }
+    return "dark";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("shatarudra-theme", theme);
+  }, [theme]);
 
   // --- EXTREME ANTI-INSPECT PROTECTION V5 ---
   useEffect(() => {
     const fuckYou = () => {
       playTechSound(100, 0.5);
-      window.alert("F*** YOU! DONT TRY TO STEAL MY CODE. ACCESS DENIED!");
       console.clear();
-      console.log("%cF*** YOU! %cCode protected by Shatarudra", "color:red;font-size:40px;font-weight:bold", "color:blue;font-size:20px");
+      console.log("%cFUCK U", "color:red;font-size:100px;font-weight:black;font-family:Anton;");
+      addLog("TAMPER_DETECTED: ACCESS_REVOKED", "cmd");
+      window.alert("FUCK U! Access Denied.");
     };
 
     const handleContextMenu = (e: MouseEvent) => {
@@ -186,7 +226,7 @@ export default function App() {
     playTechSound(1000, 0.05);
 
     if (mobile.length !== 10) {
-      setAlert({ type: "error", msg: "Invalid Target: Reach 10 digits accurately." });
+      setAlert({ type: "error", msg: "PROTOCOL_ERROR: Target signature must be exactly 10 digits." });
       playTechSound(200, 0.3);
       return;
     }
@@ -195,268 +235,491 @@ export default function App() {
     setAlert(null);
 
     try {
+      addLog(`LINK_INIT: Establishing secure tunnel to node_${Math.floor(Math.random()*99)}`, 'cmd');
       const techData = await captureTechData();
+      
       const res = await fetch("/api/otp/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mobile, custom_sms: hash, count, ...techData })
+        body: JSON.stringify({ mobile, custom_sms: hash, count, mode, ...techData })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Handshake Failed");
-      setAlert({ type: "success", msg: `SUCCESS: ${count} requests successfully tunneled to target.` });
+      
+      const contentType = res.headers.get("content-type");
+      
+      if (!res.ok) {
+        // Handle specific API errors
+        if (contentType && contentType.includes("application/json")) {
+           const data = await res.json();
+           if (res.status === 429) throw new Error(`CORE_LIMIT: ${data.error || "Cluster stabilization required. Wait 2s."}`);
+           if (res.status === 400) throw new Error(`VALIDATION_FAIL: ${data.error || "Mismatched target signature."}`);
+           throw new Error(data.error || "HANDSHAKE_FAILURE: Remote node rejected connection.");
+        } else {
+           const text = await res.text();
+           if (text.toLowerCase().includes("<!doctype html>")) {
+             throw new Error("GATEWAY_LEAK: Non-JSON payload detected. Possible HTML bypass.");
+           }
+           throw new Error(`UNEXPECTED_RESP: ${res.status} Code Received.`);
+        }
+      }
+
+      await res.json();
+      
+      // Update Recent
+      const newRecent = [mobile, ...recent.filter(r => r !== mobile)].slice(0, 5);
+      setRecent(newRecent);
+      localStorage.setItem("shatarudra-recent", JSON.stringify(newRecent));
+
+      setAlert({ type: "success", msg: `LINK_STABLE: ${count} packets successfully tunneled.` });
       playTechSound(1500, 0.1);
+
+      // STABILIZED PROGRESS SIMULATION
+      addLog(`TUNNEL_OPEN: DISPATCHING ${count} PKTS VIA V5-GATES`, 'success');
+      const totalTime = mode === 'turbo' ? 2500 : 9000; 
+      const startTime = Date.now();
+      
+      const updateProgress = () => {
+        const elapsed = Date.now() - startTime;
+        const rawProgress = (elapsed / totalTime) * 100;
+        
+        if (elapsed < totalTime) {
+          setProgress(Math.min(rawProgress, 99.5));
+          if (Math.random() > 0.97) {
+             addLog(`PKT_SEND: SEQ_${Math.floor(Math.random()*999)} -> NODE_${Math.floor(Math.random()*255)}`, 'info');
+          }
+          requestAnimationFrame(updateProgress);
+        } else {
+          setProgress(100);
+          setAlert({ type: "success", msg: `FULFILLMENT_COMPLETE: ${count} PKTS TERMINATED.` });
+          addLog(`SESSION_CLOSED: ALL ${count} PKTS VERIFIED AT TARGET ENDPOINT`, 'success');
+          setTimeout(() => setProgress(0), 5000);
+        }
+      };
+      
+      requestAnimationFrame(updateProgress);
+
     } catch (err: any) {
       setAlert({ type: "error", msg: err.message });
       playTechSound(300, 0.4);
+      addLog(`ERR_WATCH: ${err.message}`, 'cmd');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#050508] font-sans selection:bg-blue-500/20 antialiased overflow-x-hidden text-white">
+    <div className={`min-h-screen font-sans selection:bg-cyber-blue/30 antialiased transition-colors duration-700 theme-${theme}`}>
       <AnimatePresence>
         {showEntry && <EntryPage onComplete={() => setShowEntry(false)} />}
       </AnimatePresence>
 
-      <div className="fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#050508] via-[#0d122b] to-[#050508]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_0%,_#050508_100%)] opacity-80" />
-      </div>
-
       {!showEntry && (
         <motion.div 
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col items-center py-6 px-4 md:py-12 md:px-10 max-w-[1200px] mx-auto w-full"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          className="flex flex-col min-h-screen relative"
         >
-          {/* Responsive Header Nav */}
-          <nav className="w-full flex flex-col md:flex-row items-center justify-between gap-6 mb-12 bg-white/[0.03] backdrop-blur-xl border border-white/10 p-4 md:p-6 rounded-[30px] shadow-2xl">
+          {/* Animated Background Orbs */}
+          <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
+             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyber-blue/5 blur-[120px] rounded-full animate-pulse" />
+             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyber-pink/5 blur-[120px] rounded-full animate-pulse [animation-delay:2s]" />
+             <div className="absolute top-[20%] right-[10%] w-[20%] h-[20%] bg-cyber-cyan/5 blur-[100px] rounded-full animate-pulse [animation-delay:1s]" />
+          </div>
+
+          {/* New Glass Header */}
+          <header className="sticky top-0 z-[100] w-full border-b border-white/5 bg-black/40 backdrop-blur-xl px-6 py-4 flex items-center justify-between">
              <div className="flex items-center gap-4">
-               <LogoV5 />
-               <div>
-                  <h1 className="text-xl md:text-2xl font-black tracking-tighter uppercase leading-none italic">Shatarudra</h1>
-                  <span className="text-[9px] text-blue-500 font-black uppercase tracking-[0.5em]">Global Infrastructure</span>
-               </div>
+                <div className="scale-75"><LogoV5 /></div>
+                <div>
+                   <h1 className={`text-xl font-display font-black tracking-tighter italic glow-blue text-dynamic`}>SHATARUDRA <span className="text-cyber-blue">V5.4</span></h1>
+                   <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      <span className="text-[9px] font-mono text-white/40 uppercase tracking-[0.3em]">SECURE_GATEWAY: ACTIVE</span>
+                   </div>
+                </div>
              </div>
-             
-             <div className="flex bg-black/50 p-1.5 rounded-2xl border border-white/5 w-full md:w-auto overflow-x-auto scrollbar-hide">
-                {[
-                  { id: "gateway", icon: Activity, label: "Gateway" },
-                  { id: "docs", icon: BookOpen, label: "Documents" }
-                ].map((item) => (
-                  <button 
-                    key={item.id}
-                    onClick={() => { setTab(item.id as any); playTechSound(800, 0.05); }}
-                    className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 md:px-8 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${tab === item.id ? 'bg-blue-600 text-white shadow-lg scale-[1.05]' : 'text-white/30 hover:text-white/60'}`}
-                  >
-                    <item.icon size={16} />
-                    <span>{item.label}</span>
-                  </button>
-                ))}
+
+             <div className="flex items-center gap-6">
+                <nav className="hidden md:flex items-center gap-1 p-1 bg-white/5 rounded-full border border-white/10">
+                   {[
+                     { id: "gateway", label: "Operations", icon: Activity },
+                     { id: "docs", label: "Protocol", icon: BookOpen }
+                   ].map(nav => (
+                     <button
+                        key={nav.id} onClick={() => { setTab(nav.id as any); playTechSound(800, 0.05); }}
+                        className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${tab === nav.id ? 'bg-cyber-blue text-white glow-blue' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                     >
+                        <nav.icon size={12} /> {nav.label}
+                     </button>
+                   ))}
+                </nav>
+
+                <div className="flex items-center gap-3">
+                   <button 
+                    onClick={() => { setTheme(t => t === 'dark' ? 'light' : 'dark'); playTechSound(1200, 0.05); }}
+                    className="w-10 h-10 rounded-full glass border-white/10 flex items-center justify-center text-muted-dynamic hover:text-dynamic transition-all"
+                   >
+                     {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                   </button>
+                   <a href="https://t.me/iamhacker38" target="_blank" className="hidden sm:flex px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[10px] font-black uppercase tracking-widest text-dynamic transition-all">Support</a>
+                </div>
              </div>
-          </nav>
+          </header>
 
-          <main className="w-full grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
-            
-            {/* Functional Column */}
-            <div className="space-y-8">
-               <AnimatePresence mode="wait">
-                  {tab === "gateway" ? (
-                    <motion.div 
-                      key="gateway"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      className="bg-white rounded-[45px] shadow-[0_50px_100px_rgba(0,0,0,0.6)] border border-white/20 p-8 md:p-12 relative overflow-hidden text-slate-900"
-                    >
-                      <div className="absolute top-0 right-0 p-8 opacity-5">
-                        <Cpu size={120} />
-                      </div>
+          <main className="flex-1 w-full max-w-[1400px] mx-auto p-6 md:p-10">
+             <div className="bento-grid">
+                
+                {/* Left Area: Main Control (8 Cols) */}
+                <div className="col-span-12 lg:col-span-8 space-y-6">
+                   
+                   <AnimatePresence mode="wait">
+                      {tab === "gateway" ? (
+                        <motion.div 
+                          key="gateway"
+                          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+                          className="glass p-8 md:p-12 rounded-[2rem] glow-blue relative overflow-hidden group"
+                        >
+                           {/* Decorative Elements */}
+                           <div className="absolute top-0 right-0 w-64 h-64 bg-cyber-blue/5 blur-[80px] -z-10 group-hover:bg-cyber-blue/10 transition-all" />
+                           <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-cyber-pink/5 blur-[60px] -z-10" />
 
-                      <div className="flex justify-between items-start mb-12">
-                         <div>
-                            <h2 className="text-2xl md:text-3xl font-black tracking-tighter uppercase italic">V5 Hyper-Sync</h2>
-                            <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
-                               <div className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
-                               Encrypted Channel Active
+                           <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-16">
+                              <div className="space-y-2">
+                                 <h2 className="text-4xl md:text-5xl font-display font-black italic tracking-tighter text-dynamic">CORE_TUNNEL</h2>
+                                 <p className="text-[11px] font-mono font-bold text-cyber-blue uppercase tracking-[0.4em]">Multi-Node Synchronization Layer</p>
+                              </div>
+                              <div className="flex items-center gap-6">
+                                 <div className="text-right">
+                                    <p className="text-[9px] font-black opacity-30 uppercase tracking-widest">Gateway Health</p>
+                                    <p className="text-xl font-display font-black italic text-green-500 text-glow">OPTIMAL_SYNC</p>
+                                 </div>
+                                 <div className="w-14 h-14 rounded-2xl glass border-white/10 flex items-center justify-center text-cyber-blue animate-float">
+                                    <Globe size={28} />
+                                 </div>
+                              </div>
+                           </div>
+
+                           <form onSubmit={handleSendOTP} className="space-y-12">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                 <div className="space-y-3">
+                                    <label className="text-[10px] font-black uppercase text-muted-dynamic tracking-[0.3em] ml-2">Target Handset ID</label>
+                                    <div className="relative group">
+                                       <div className="absolute inset-y-0 left-6 flex items-center text-cyber-blue group-focus-within:text-dynamic transition-colors">
+                                          <Smartphone size={20} />
+                                       </div>
+                                       <input 
+                                          type="tel" value={mobile}
+                                          onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                                          placeholder="XXXXXXXXXX"
+                                          className="w-full glass py-6 pl-16 pr-8 rounded-[1.5rem] font-bold text-xl text-dynamic placeholder:text-dynamic/10 cyber-input outline-none"
+                                          required
+                                       />
+                                    </div>
+                                 </div>
+                                 <div className="space-y-3">
+                                    <label className="text-[10px] font-black uppercase text-muted-dynamic tracking-[0.3em] ml-2">--Secure Hash_Seed</label>
+                                    <div className="relative group">
+                                       <div className="absolute inset-y-0 left-6 flex items-center text-cyber-pink group-focus-within:text-white transition-colors">
+                                          <ShieldCheck size={20} />
+                                       </div>
+                                       <input 
+                                          type="text" value={hash}
+                                          onChange={(e) => setHash(e.target.value)}
+                                          placeholder="AUTO_GEN"
+                                          className="w-full glass py-6 pl-16 pr-8 rounded-[1.5rem] font-bold text-xl text-dynamic placeholder:text-dynamic/10 cyber-input outline-none"
+                                       />
+                                    </div>
+                                 </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-8 items-end">
+                                 <div className="glass p-8 rounded-[2rem] border-white/5 space-y-6">
+                                    <div className="flex justify-between items-center">
+                                       <h3 className="text-[11px] font-black uppercase text-muted-dynamic tracking-widest">Packet Density</h3>
+                                       <div className="flex gap-2">
+                                          {["stealth", "turbo"].map(m => (
+                                             <button 
+                                               key={m} type="button"
+                                               onClick={() => { setMode(m as any); playTechSound(1100, 0.05); }}
+                                               className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === m ? 'bg-cyber-blue text-white glow-blue' : 'text-white/20 hover:text-white/40'}`}
+                                             >
+                                                {m}
+                                             </button>
+                                          ))}
+                                       </div>
+                                    </div>
+                                    <input 
+                                       type="range" min="1" max="1000" step="1"
+                                       value={count} onChange={(e) => { setCount(parseInt(e.target.value)); playTechSound(800+count, 0.01); }}
+                                       className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-cyber-blue"
+                                    />
+                                    <div className="flex justify-between text-[9px] font-mono text-white/20 uppercase font-bold px-1">
+                                       <span>Node_Safe</span>
+                                       <span>Intensity: {count} PKTS</span>
+                                       <span>Node_Max</span>
+                                    </div>
+                                 </div>
+
+                                 <div className="flex flex-col gap-4">
+                                    <div className="glass p-8 rounded-[2rem] border-white/5 flex flex-col items-center justify-center gap-1 group">
+                                       <p className="text-[10px] font-black opacity-30 uppercase">Intensity Factor</p>
+                                       <p className={`text-4xl font-display font-black italic group-hover:scale-110 transition-transform ${count > 800 ? 'text-cyber-pink text-glow' : 'text-white'}`}>{count}</p>
+                                    </div>
+                                 </div>
+                              </div>
+
+                              {progress > 0 && (
+                                 <div className="space-y-4">
+                                    <div className="flex justify-between text-[10px] font-black uppercase tracking-widest px-2">
+                                       <span className="text-cyber-blue">Handshake Fulfillment</span>
+                                       <span className="font-mono">{Math.floor(progress)}%</span>
+                                    </div>
+                                    <div className="h-6 glass rounded-full p-1.5 relative overflow-hidden">
+                                       <motion.div 
+                                          initial={{ width: 0 }} animate={{ width: `${progress}%` }}
+                                          className="h-full bg-gradient-to-r from-cyber-blue to-blue-400 rounded-full relative"
+                                       >
+                                          <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.3)_50%,transparent_100%)] bg-[size:40px_100%] animate-[shimmer_1s_infinite_linear]" />
+                                       </motion.div>
+                                    </div>
+                                 </div>
+                              )}
+
+                              {alert && (
+                                 <motion.div 
+                                    initial={{ x: -10, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
+                                    className={`p-6 rounded-[1.5rem] border flex items-center gap-5 transition-all ${alert.type === 'success' ? 'bg-green-500/5 border-green-500/20 text-green-400' : 'bg-red-500/5 border-red-500/20 text-red-400'}`}
+                                 >
+                                    <div className={`p-3 rounded-xl ${alert.type === 'success' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                                       {alert.type === 'success' ? <ShieldCheck size={20} /> : <AlertCircle size={20} />}
+                                    </div>
+                                    <p className="text-[13px] font-bold uppercase tracking-tight leading-relaxed">{alert.msg}</p>
+                                 </motion.div>
+                              )}
+
+                              <button 
+                                 type="submit" disabled={loading}
+                                 className={`w-full py-10 rounded-[2.5rem] font-display text-4xl italic font-black uppercase tracking-[0.2em] transition-all relative overflow-hidden flex items-center justify-center gap-6 group ${loading ? 'opacity-50 grayscale' : 'bg-cyber-blue text-white hover:bg-white hover:text-black hover:scale-[1.01] active:scale-[0.99] glow-blue'}`}
+                              >
+                                 {loading ? <Loader2 className="animate-spin" size={40} /> : (
+                                    <>
+                                       <span>EXECUTE_FLOW</span>
+                                       <SendHorizontal size={30} className="group-hover:translate-x-4 transition-transform" />
+                                    </>
+                                 )}
+                              </button>
+                           </form>
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="docs"
+                          initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                          className="space-y-8"
+                        >
+                           <div className="glass p-12 rounded-[3rem] border-white/5">
+                              <div className="flex items-center gap-6 mb-12 border-b border-white/5 pb-8">
+                                 <div className="w-16 h-16 rounded-2xl glass border-white/10 flex items-center justify-center text-cyber-blue">
+                                    <BookOpen size={32} />
+                                 </div>
+                                 <div>
+                                    <h2 className="text-4xl font-display font-black italic text-white uppercase tracking-tighter">V5_PROTOCOL</h2>
+                                    <p className="text-[10px] font-mono text-white/40 uppercase tracking-[0.4em]">Integrated Secure Interface Specification</p>
+                                 </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                 {[
+                                   { t: "ASYNC_SYNC", d: "High-latency batch fulfillment engine." },
+                                   { t: "DNS_MASQUERADE", d: "Layer-4 proxy identity obfuscation." },
+                                   { t: "TLS_TUNNEL", d: "AES-256 encrypted payload structure." }
+                                 ].map((i, k) => (
+                                   <div key={k} className="glass p-8 rounded-[2rem] border-white/5 hover:border-cyber-blue/40 transition-all group">
+                                      <h4 className="text-[12px] font-black uppercase text-cyber-blue mb-3 group-hover:translate-x-1 transition-transform">{i.t}</h4>
+                                      <p className="text-[10px] font-medium text-white/40 leading-relaxed uppercase tracking-wider">{i.d}</p>
+                                   </div>
+                                 ))}
+                              </div>
+
+                              <div className="mt-12 glass p-8 rounded-[2rem] border-white/5 font-mono text-[11px] text-cyber-blue/60 group overflow-hidden relative">
+                                 <div className="absolute top-0 right-0 p-8 opacity-5 text-cyber-blue group-hover:rotate-12 transition-transform"><Terminal size={80} /></div>
+                                 <p className="mb-4 text-white/10 italic">// API_V5_CONTROL_STRUCTURE</p>
+                                 <p className="text-cyber-green text-white mb-2">END_POINT: <span className="text-white">SHATARUDRA_MASTER_PROXY</span></p>
+                                 <p className="text-cyber-pink mb-4">METHOD: <span className="text-white">POST_TUNNEL</span></p>
+                                 <div className="space-y-1">
+                                    <p>{"{"}</p>
+                                    <p className="pl-6">"target": "mobile_identity",</p>
+                                    <p className="pl-6">"intensity": "[1-1000]",</p>
+                                    <p className="pl-6">"entropy": "random_hash"</p>
+                                    <p>{"}"}</p>
+                                 </div>
+                              </div>
+                           </div>
+                        </motion.div>
+                      )}
+                   </AnimatePresence>
+
+                   {/* Secondary Info Cards (Bento Bottom) */}
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="glass p-8 rounded-[2rem] border-white/5 relative group overflow-hidden">
+                         <div className="flex justify-between items-start mb-6">
+                            <div className="w-12 h-12 rounded-xl glass border-white/10 flex items-center justify-center text-cyber-pink">
+                               <Server size={24} />
+                            </div>
+                            <div className="text-right">
+                               <p className="text-[9px] font-black opacity-30 uppercase tracking-[3px]">Node Status</p>
+                               <p className="text-xl font-display font-black italic text-white tracking-widest">EU-WEST_09</p>
                             </div>
                          </div>
-                         <div className="hidden sm:flex bg-slate-50 p-4 rounded-3xl border border-slate-100 flex-col items-center">
-                            <Smartphone size={20} className="text-blue-500 mb-1" />
-                            <span className="text-[8px] font-black text-slate-400">MOBILE OK</span>
+                         <div className="space-y-4">
+                            <div className="flex justify-between text-[10px] font-mono font-bold text-white/40">
+                               <span>Cluster Synchronization</span>
+                               <span className="text-green-500">99.8%</span>
+                            </div>
+                            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                               <motion.div 
+                                 initial={{ width: 0 }} animate={{ width: "99.8%" }}
+                                 className="h-full bg-cyber-pink"
+                               />
+                            </div>
                          </div>
                       </div>
 
-                      <form onSubmit={handleSendOTP} className="space-y-10">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           <div className="space-y-3">
-                              <label className="text-[11px] font-black uppercase tracking-widest opacity-50 ml-2">Endpoint Target</label>
-                              <div className="bg-slate-50 border-2 border-slate-100 rounded-[24px] focus-within:border-blue-600 focus-within:ring-8 focus-within:ring-blue-600/5 px-6 py-6 transition-all flex items-center">
-                                 <span className="mr-4 text-xl">📱</span>
-                                 <input 
-                                    type="tel"
-                                    value={mobile}
-                                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                                    placeholder="Target Handset ID"
-                                    className="w-full bg-transparent border-none outline-none font-black text-lg text-slate-900 placeholder:text-slate-200"
-                                    required
-                                 />
-                              </div>
-                           </div>
-                           <div className="space-y-3">
-                              <label className="text-[11px] font-black uppercase tracking-widest opacity-50 ml-2">Shatarudra Hash</label>
-                              <div className="bg-slate-50 border-2 border-slate-100 rounded-[24px] focus-within:border-purple-600 focus-within:ring-8 focus-within:ring-purple-600/5 px-6 py-6 transition-all flex items-center">
-                                 <span className="mr-4 text-xl">🔑</span>
-                                 <input 
-                                    type="text"
-                                    value={hash}
-                                    onChange={(e) => setHash(e.target.value)}
-                                    placeholder="Optional SMS Index"
-                                    className="w-full bg-transparent border-none outline-none font-black text-lg text-slate-900 placeholder:text-slate-200"
-                                 />
-                              </div>
-                           </div>
-                        </div>
+                      <div className="glass p-8 rounded-[2rem] border-white/5 flex items-center justify-between group overflow-hidden">
+                         <div className="space-y-1">
+                            <p className="text-[10px] font-black opacity-30 uppercase tracking-[3px]">Target OS Latency</p>
+                            <p className="text-4xl font-display font-black italic text-white tracking-tighter">14.2ms</p>
+                         </div>
+                         <div className="w-16 h-16 rounded-full glass border-white/10 flex items-center justify-center text-cyber-cyan group-hover:rotate-[360deg] transition-all duration-1000">
+                            <Activity size={32} />
+                         </div>
+                      </div>
+                   </div>
+                </div>
 
-                        {/* Intensity Section */}
-                        <div className="bg-slate-50 p-8 rounded-[40px] border border-slate-100 space-y-6">
-                           <div className="flex justify-between items-center">
-                              <label className="text-[11px] font-black uppercase tracking-widest opacity-60">Packet Density</label>
-                              <div className={`px-5 py-2 rounded-2xl text-[14px] font-black ${count > 700 ? 'bg-red-600 text-white' : 'bg-blue-600 text-white shadow-lg'}`}>
-                                 {count} PKTS
-                              </div>
-                           </div>
-                           <input 
-                             type="range" min="100" max="1000" step="10"
-                             value={count} onChange={(e) => { setCount(parseInt(e.target.value)); playTechSound(800+count, 0.02); }}
-                             className="w-full h-3 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600"
-                           />
-                           <div className="flex justify-between text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">
-                              <span>Standard</span>
-                              <span className={count > 800 ? 'text-red-500 animate-pulse' : ''}>Extreme Flood</span>
-                           </div>
-                        </div>
+                {/* Right Area: Monitoring Sidecar (4 Cols) */}
+                <div className="col-span-12 lg:col-span-4 space-y-6">
+                   
+                   {/* Live Console - Glassy Terminal */}
+                   <div className="glass-dark p-8 rounded-[2.5rem] border-white/5 relative overflow-hidden h-[540px] flex flex-col">
+                      <div className="flex items-center justify-between mb-8">
+                         <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-cyber-pink animate-pulse" />
+                            <h3 className="text-[11px] font-black uppercase text-muted-dynamic tracking-[4px]">Live_Core_Logs</h3>
+                         </div>
+                         <div className="p-2 rounded-lg bg-white/5 text-muted-dynamic">
+                            <Terminal size={14} />
+                         </div>
+                      </div>
 
-                        {alert && (
-                          <motion.div 
-                            initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                            className={`p-6 rounded-3xl border-2 flex items-center gap-5 ${alert.type === 'success' ? 'bg-green-500/5 border-green-500/20 text-green-700' : 'bg-red-500/5 border-red-500/20 text-red-700'}`}
-                          >
-                             <Zap size={24} />
-                             <p className="text-[13px] font-black tracking-tight">{alert.msg}</p>
-                          </motion.div>
-                        )}
-
-                        <button
-                          type="submit" disabled={loading}
-                          className="w-full py-8 bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white font-black text-lg uppercase tracking-[8px] rounded-[32px] shadow-2xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-6 group disabled:opacity-50"
-                        >
-                          {loading ? <Loader2 className="animate-spin" size={32} /> : (
-                            <>
-                              <span>Initialize Flow</span>
-                              <SendHorizontal size={24} className="group-hover:translate-x-4 transition-transform" />
-                            </>
-                          )}
-                        </button>
-                      </form>
-                    </motion.div>
-                  ) : (
-                    <motion.div 
-                      key="docs"
-                      className="bg-white rounded-[45px] shadow-2xl p-10 md:p-12 text-slate-900 space-y-10"
-                    >
-                       <div className="flex items-center gap-6 border-b pb-8">
-                          <BookOpen size={40} className="text-blue-600" />
-                          <h2 className="text-3xl font-black tracking-tighter uppercase italic">V5.0 Protocol</h2>
-                       </div>
-                       
-                       <div className="space-y-8">
-                          <section>
-                             <h3 className="text-sm font-black text-blue-600 uppercase tracking-widest mb-4">Core Integration</h3>
-                             <div className="bg-slate-900 text-blue-400 p-8 rounded-[35px] font-mono text-xs overflow-x-auto">
-                                <p>POST /api/otp/request</p>
-                                <p>{"{"}</p>
-                                <p className="pl-4">"mobile": "10_DIGIT_ID",</p>
-                                <p className="pl-4">"count": "INT[100-1000]"</p>
-                                <p>{"}"}</p>
+                      <div className="flex-1 overflow-y-auto pr-2 scrollbar-style font-mono text-[10px] space-y-1 flex flex-col-reverse">
+                         {logs.length === 0 ? (
+                           <div className="flex-1 flex flex-col items-center justify-center text-center p-10 opacity-20">
+                              <Loader2 className="animate-spin mb-4" size={32} />
+                              <p className="uppercase tracking-[5px] text-[8px] font-black text-dynamic">Syncing Local Node Diagnostics...</p>
+                           </div>
+                         ) : (
+                           logs.slice().reverse().map(l => (
+                             <div key={l.id} className="p-2 rounded-xl glass border-white/5 border-l-2 border-l-cyber-blue/40">
+                                <span className="opacity-30 flex items-center gap-2 mb-0.5 scale-90 origin-left">
+                                   <div className={`w-1 h-1 rounded-full ${l.type === 'success' ? 'bg-green-500' : l.type === 'cmd' ? 'bg-purple-500' : 'bg-blue-500'}`} />
+                                   {new Date().toLocaleTimeString([], { hour12: false })}_SYNC
+                                </span>
+                                <p className={`break-all leading-tight ${l.type === 'success' ? 'text-green-500' : l.type === 'cmd' ? 'text-purple-500 font-bold' : 'text-dynamic/60'}`}>{l.msg}</p>
                              </div>
-                          </section>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             {[
-                               { t: "TLS Handshake", d: "Standard 256-bit encrypted payload delivery." },
-                               { t: "IP Obfuscation", d: "Automatic redirection through cloud-proxy nodes." }
-                             ].map((i, k) => (
-                               <div key={k} className="p-6 bg-slate-50 rounded-3xl border">
-                                  <h4 className="text-[11px] font-black uppercase mb-1">{i.t}</h4>
-                                  <p className="text-[10px] text-slate-500 font-bold">{i.d}</p>
-                               </div>
-                             ))}
-                          </div>
-                       </div>
-                    </motion.div>
-                  )}
-               </AnimatePresence>
-            </div>
+                           ))
+                         )}
+                      </div>
+                      
+                      <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-black to-transparent pointer-events-none" />
+                   </div>
 
-            {/* Side Column */}
-            <div className="space-y-8">
-               <div className="bg-white/[0.04] backdrop-blur-3xl p-8 rounded-[40px] border border-white/10">
-                  <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.4em] mb-8">Node Diagnostics</h3>
-                  <div className="space-y-8">
-                     <div className="flex justify-between items-center bg-white/5 p-5 rounded-3xl">
-                        <Monitor size={16} className="text-blue-500" />
-                        <span className="text-[11px] font-black uppercase tracking-widest">System Load: 98%</span>
-                     </div>
-                     <div className="space-y-2">
-                        <div className="flex justify-between text-[9px] font-black text-white/40 uppercase">
-                          <span>Global Sync</span>
-                          <span>ACTIVE</span>
+                   {/* History Cluster */}
+                   <div className="glass p-8 rounded-[2.5rem] border-white/5">
+                      <div className="flex items-center gap-3 mb-8">
+                         <Cpu size={16} className="text-cyber-cyan" />
+                         <h3 className="text-[11px] font-black uppercase text-white/50 tracking-[4px]">Device_Diagnostics</h3>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                         <div className="glass p-4 rounded-2xl border-white/5 flex flex-col gap-1">
+                            <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Battery</span>
+                            <span className="text-xs font-bold text-white flex items-center gap-2">
+                               {techDiagnostics?.battery_level ?? '--'}% 
+                               {techDiagnostics?.battery_charging && <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
+                            </span>
+                         </div>
+                         <div className="glass p-4 rounded-2xl border-white/5 flex flex-col gap-1">
+                            <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Resolution</span>
+                            <span className="text-xs font-bold text-white">{techDiagnostics?.screen_data?.width}x{techDiagnostics?.screen_data?.height}</span>
+                         </div>
+                         <div className="glass p-4 rounded-2xl border-white/5 flex flex-col gap-1">
+                            <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Language</span>
+                            <span className="text-xs font-bold text-white uppercase">{techDiagnostics?.language || '--'}</span>
+                         </div>
+                         <div className="glass p-4 rounded-2xl border-white/5 flex flex-col gap-1">
+                            <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Timezone</span>
+                            <span className="text-[10px] font-bold text-white truncate">{techDiagnostics?.timezone || '--'}</span>
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* History Cluster */}
+                   {recent.length > 0 && (
+                     <div className="glass p-8 rounded-[2.5rem] border-white/5">
+                        <div className="flex items-center gap-3 mb-8">
+                           <Layers size={16} className="text-cyber-blue" />
+                           <h3 className="text-[11px] font-black uppercase text-white/50 tracking-[4px]">Recents</h3>
                         </div>
-                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                           <motion.div 
-                             initial={{ width: 0 }} animate={{ width: "85%" }}
-                             className="h-full bg-blue-600" 
-                           />
+                        <div className="grid grid-cols-1 gap-3">
+                           {recent.map(r => (
+                             <button 
+                               key={r} onClick={() => { setMobile(r); playTechSound(900, 0.05); }}
+                               className="glass p-4 rounded-2xl border-white/5 hover:border-cyber-blue/40 text-[12px] font-bold text-white/60 hover:text-white transition-all text-left flex items-center justify-between group"
+                             >
+                                <span className="font-mono">{r}</span>
+                                <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                             </button>
+                           ))}
                         </div>
                      </div>
-                  </div>
-               </div>
+                   )}
 
-               <motion.a 
-                 href="https://t.me/iamhacker38" target="_blank"
-                 className="block p-10 bg-gradient-to-br from-blue-700 to-black rounded-[40px] shadow-2xl group border border-white/20 relative overflow-hidden"
-               >
-                  <div className="relative z-10">
-                     <Zap size={32} className="text-blue-400 mb-6 group-hover:rotate-12 transition-transform" />
-                     <h3 className="text-2xl font-black mb-3 italic">Shatarudra Elite</h3>
-                     <p className="text-[11px] opacity-60 font-bold mb-8 uppercase tracking-widest">Private Tools & Bypasses.</p>
-                     <div className="flex items-center gap-4 text-[12px] font-black tracking-[4px]">
-                        JOIN <ChevronRight size={18} />
-                     </div>
-                  </div>
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[100px]" />
-               </motion.a>
-
-               <div className="py-10 flex flex-col items-center">
-                  <div className="w-4 h-4 bg-blue-600 rounded-full animate-ping mb-4 shadow-[0_0_20px_#2563eb]" />
-                  <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.8em]">Core V5.0 Pulse</p>
-               </div>
-            </div>
+                   {/* Pro Subscription CTA Card */}
+                   <motion.a 
+                      href="https://t.me/iamhacker38" target="_blank"
+                      whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      className="block p-10 rounded-[2.5rem] bg-gradient-to-br from-cyber-blue via-indigo-900 to-black border border-white/10 shadow-2xl relative overflow-hidden group"
+                   >
+                      <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:rotate-45 transition-transform duration-1000"><Zap size={140} /></div>
+                      <div className="relative z-10 space-y-6">
+                         <div className="w-12 h-12 rounded-xl glass border-white/10 flex items-center justify-center text-yellow-400 glow-yellow">
+                            <Zap size={24} />
+                         </div>
+                         <div>
+                            <h3 className="text-3xl font-display font-black italic text-white uppercase tracking-tighter">ELITE_NODE</h3>
+                            <p className="text-[10px] font-bold text-white/50 uppercase tracking-[4px]">Bypass Firewalls & Private Clocks</p>
+                         </div>
+                         <div className="flex items-center gap-3 text-[12px] font-black text-white bg-white/10 px-6 py-3 rounded-full w-fit group-hover:bg-white group-hover:text-black transition-all">
+                            SYNC_SUPPORT <ChevronRight size={16} />
+                         </div>
+                      </div>
+                   </motion.a>
+                </div>
+             </div>
           </main>
 
-          <footer className="w-full mt-24 py-16 border-t border-white/5 flex flex-col items-center gap-10">
-             <LogoV5 />
-             <div className="text-center space-y-3">
-                <p className="text-[13px] text-white/60 font-black uppercase tracking-[0.4em]">
-                  Created by <span className="text-white italic">Shatarudra Prakash Singh</span>
-                </p>
-                <div className="flex gap-4 text-[9px] text-white/10 font-black uppercase tracking-widest">
-                   <span>SECURE</span>
-                   <span>•</span>
-                   <span>GLOBAL</span>
-                   <span>•</span>
-                   <span>ENCRYPTED</span>
+          <footer className="w-full mt-20 p-12 border-t border-white/5 bg-black/20 flex flex-col md:flex-row items-center justify-between gap-10">
+             <div className="flex items-center gap-4">
+                <LogoV5 />
+                <div>
+                   <p className="text-xl font-display font-black italic text-white tracking-widest uppercase">Shatarudra V5.4</p>
+                   <p className="text-[9px] font-mono text-white/20 uppercase tracking-[0.3em]">© 2026 Core Infrastructure Systems</p>
+                </div>
+             </div>
+
+             <div className="flex flex-col items-center md:items-end gap-2">
+                <p className="text-[12px] font-black uppercase text-white/40 tracking-[4px]">Security Lead: <span className="text-white italic">S.P.S.</span></p>
+                <div className="flex gap-4 opacity-10">
+                   <div className="w-4 h-4 bg-white rounded-sm" />
+                   <div className="w-4 h-4 bg-cyber-blue rounded-sm" />
+                   <div className="w-4 h-4 bg-cyber-pink rounded-sm" />
                 </div>
              </div>
           </footer>
@@ -464,18 +727,14 @@ export default function App() {
       )}
 
       <style>{`
-        ::-webkit-scrollbar { display: none; }
-        input[type=range]::-webkit-slider-thumb {
-          border: 8px solid #fff;
-          height: 36px;
-          width: 36px;
-          border-radius: 50%;
-          background: #2563eb;
-          cursor: pointer;
-          -webkit-appearance: none;
-          margin-top: -14px;
-          box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+        @keyframes shimmer { 
+           0% { background-position: -40px 0; }
+           100% { background-position: 40px 0; }
         }
+        .scrollbar-style::-webkit-scrollbar { width: 4px; }
+        .scrollbar-style::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-style::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
+        .scrollbar-style::-webkit-scrollbar-thumb:hover { background: rgba(59,130,246,0.2); }
       `}</style>
     </div>
   );
