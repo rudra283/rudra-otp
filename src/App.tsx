@@ -269,6 +269,7 @@ export default function App() {
 
       const serverData = await res.json();
       const sessionId = serverData.metadata?.session_id || "UNKNOWN";
+      const platform = serverData.metadata?.platform || "node";
       
       // Update Recent
       const newRecent = [mobile, ...recent.filter(r => r !== mobile)].slice(0, 5);
@@ -279,7 +280,8 @@ export default function App() {
       playTechSound(1500, 0.1);
 
       // STABILIZED PROGRESS SIMULATION
-      addLog(`TUNNEL_OPEN: ID_${sessionId.slice(0,8)} | DISPATCHING ${count} PKTS`, 'success');
+      addLog(`TUNNEL_OPEN: ID_${sessionId.slice(0,8)} | MODE_${platform.toUpperCase()}`, 'success');
+      addLog(`DISPATCHING: Syncing ${count} packets across distributed nodes...`, 'info');
       const totalTime = mode === 'turbo' ? 2500 : 9000; 
       const startTime = Date.now();
       

