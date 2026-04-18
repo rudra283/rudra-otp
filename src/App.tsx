@@ -250,30 +250,36 @@ export default function App() {
         // Handle specific API errors
         if (contentType && contentType.includes("application/json")) {
            const data = await res.json();
-           if (res.status === 429) throw new Error(`CORE_LIMIT: ${data.error || "Cluster stabilization required. Wait 2s."}`);
-           if (res.status === 400) throw new Error(`VALIDATION_FAIL: ${data.error || "Mismatched target signature."}`);
-           throw new Error(data.error || "HANDSHAKE_FAILURE: Remote node rejected connection.");
+           const errorMsg = data.msg || data.error || "HANDSHAKE_FAILURE: Remote node rejected connection.";
+           
+           if (res.status === 429) throw new Error(`CORE_LIMIT: ${errorMsg}`);
+           if (res.status === 400) throw new Error(`VALIDATION_FAIL: ${errorMsg}`);
+           if (res.status === 404) throw new Error(`ENDPOINT_LOST: ${errorMsg} (${res.status})`);
+           
+           throw new Error(errorMsg);
         } else {
            const text = await res.text();
            if (text.toLowerCase().includes("<!doctype html>")) {
-             throw new Error("GATEWAY_LEAK: Non-JSON payload detected. Possible HTML bypass.");
+             throw new Error("GATEWAY_LEAK: Non-JSON payload detected. Possibly hitting static server fallback.");
            }
-           throw new Error(`UNEXPECTED_RESP: ${res.status} Code Received.`);
+           const bodyPreview = text.slice(0, 100).replace(/\n/g, ' ');
+           throw new Error(`UNEXPECTED_RESP: ${res.status} | Body: ${bodyPreview}... Verify server is running.`);
         }
       }
 
-      await res.json();
+      const serverData = await res.json();
+      const sessionId = serverData.metadata?.session_id || "UNKNOWN";
       
       // Update Recent
       const newRecent = [mobile, ...recent.filter(r => r !== mobile)].slice(0, 5);
       setRecent(newRecent);
       localStorage.setItem("shatarudra-recent", JSON.stringify(newRecent));
 
-      setAlert({ type: "success", msg: `LINK_STABLE: ${count} packets successfully tunneled.` });
+      setAlert({ type: "success", msg: `LINK_STABLE: tunnel_${sessionId.slice(0,6)} anchored.` });
       playTechSound(1500, 0.1);
 
       // STABILIZED PROGRESS SIMULATION
-      addLog(`TUNNEL_OPEN: DISPATCHING ${count} PKTS VIA V5-GATES`, 'success');
+      addLog(`TUNNEL_OPEN: ID_${sessionId.slice(0,8)} | DISPATCHING ${count} PKTS`, 'success');
       const totalTime = mode === 'turbo' ? 2500 : 9000; 
       const startTime = Date.now();
       
@@ -283,8 +289,9 @@ export default function App() {
         
         if (elapsed < totalTime) {
           setProgress(Math.min(rawProgress, 99.5));
-          if (Math.random() > 0.97) {
-             addLog(`PKT_SEND: SEQ_${Math.floor(Math.random()*999)} -> NODE_${Math.floor(Math.random()*255)}`, 'info');
+          if (Math.random() > 0.95) {
+             const subId = serverData.metadata?.session_id?.slice(0,4) || Math.floor(Math.random()*999);
+             addLog(`PKT_SEND: SEQ_${subId}_${Math.floor(Math.random()*999)} -> NODE_${Math.floor(Math.random()*255)}`, 'info');
           }
           requestAnimationFrame(updateProgress);
         } else {
