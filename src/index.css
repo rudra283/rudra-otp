@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bento-bg: #050505;
+  --color-bento-card: rgba(255, 255, 255, 0.03);
+  --color-bento-glass: rgba(255, 255, 255, 0.08);
+  --color-bento-border: rgba(255, 255, 255, 0.12);
+  --color-accent-purple: #6a11cb;
+  --color-accent-blue: #2575fc;
+  --color-neon-cyan: #00f2fe;
+  --color-neon-green: #00FF9D;
+  
+  --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-bento-bg text-white font-sans min-h-screen overflow-x-hidden;
+    background-image: 
+      radial-gradient(circle at 0% 0%, #1a1a2e 0%, transparent 40%),
+      radial-gradient(circle at 100% 100%, #16213e 0%, transparent 40%);
+    background-attachment: fixed;
+  }
+}
